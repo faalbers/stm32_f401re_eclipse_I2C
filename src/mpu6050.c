@@ -112,7 +112,7 @@ void SetupMPU(void)
 void SelfTestMPU(void)
 {
   uint8_t rawData[4];
-  //uint8_t selfTest[6];
+  uint8_t selfTest[6];
   //float factoryTrim[6];
 
   // Configure the accelerometer for self-test
@@ -124,19 +124,26 @@ void SelfTestMPU(void)
   ReadMPU(MPU_RA_SELF_TEST_Z, rawData+2); // Z-axis self-test results
   ReadMPU(MPU_RA_SELF_TEST_A, rawData+3); // Mixed-axis self-test results
 
-  trace_printf("Self_TEST_X: 0x%02x\n", *rawData);
-  trace_printf("Self_TEST_Y: 0x%02x\n", *(rawData+1));
-  trace_printf("Self_TEST_Z: 0x%02x\n", *(rawData+2));
-  //trace_printf("Self_TEST_X: 0x%02x\n", rawData);
-  /*
+  trace_printf("Self_TEST_X: 0x%02x\n", rawData[0]);
+  trace_printf("Self_TEST_Y: 0x%02x\n", rawData[1]);
+  trace_printf("Self_TEST_Z: 0x%02x\n", rawData[2]);
+  trace_printf("Self_TEST_A: 0x%02x\n", rawData[3]);
+
   // Extract the acceleration test results first
-  selfTest[0] = (rawData[0] >> 3) | (rawData[3] & 0x30) >> 4 ; // XA_TEST result is a five-bit unsigned integer
-  selfTest[1] = (rawData[1] >> 3) | (rawData[3] & 0x0C) >> 4 ; // YA_TEST result is a five-bit unsigned integer
-  selfTest[2] = (rawData[2] >> 3) | (rawData[3] & 0x03) >> 4 ; // ZA_TEST result is a five-bit unsigned integer
+  selfTest[0] = ((rawData[0] & 0xE0) >> 3) | ((rawData[3] & 0x30) >> 4); // XA_TEST result is a five-bit unsigned integer
+  selfTest[1] = ((rawData[1] & 0xE0) >> 3) | ((rawData[3] & 0x0C) >> 2); // YA_TEST result is a five-bit unsigned integer
+  selfTest[2] = ((rawData[2] & 0xE0) >> 3) | (rawData[3] & 0x03); // ZA_TEST result is a five-bit unsigned integer
+  trace_printf("Self_TEST_AX: 0x%02x\n", selfTest[0]);
+  trace_printf("Self_TEST_AY: 0x%02x\n", selfTest[1]);
+  trace_printf("Self_TEST_AZ: 0x%02x\n", selfTest[2]);
+  /*
   // Extract the gyration test results first
-  selfTest[3] = rawData[0]  & 0x1F ; // XG_TEST result is a five-bit unsigned integer
-  selfTest[4] = rawData[1]  & 0x1F ; // YG_TEST result is a five-bit unsigned integer
-  selfTest[5] = rawData[2]  & 0x1F ; // ZG_TEST result is a five-bit unsigned integer
+  selfTest[3] = rawData[0] & 0x1F ; // XG_TEST result is a five-bit unsigned integer
+  selfTest[4] = rawData[1] & 0x1F ; // YG_TEST result is a five-bit unsigned integer
+  selfTest[5] = rawData[2] & 0x1F ; // ZG_TEST result is a five-bit unsigned integer
+  */
+
+  /*
   // Process results to allow final comparison with factory set values
   factoryTrim[0] = (4096.0*0.34)*(pow( (0.92/0.34) , (((float)selfTest[0] - 1.0)/30.0))); // FT[Xa] factory trim calculation
   factoryTrim[1] = (4096.0*0.34)*(pow( (0.92/0.34) , (((float)selfTest[1] - 1.0)/30.0))); // FT[Ya] factory trim calculation
