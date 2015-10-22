@@ -65,28 +65,28 @@
 #define MPU_RA_I2C_MST_STATUS (0x36)
 #define MPU_RA_INT_PIN_CFG    (0x37)
 #define MPU_RA_INT_ENABLE     (0x38)
-#define MPU_RA_I2C_SLV0_DO (0x63)
-#define MPU_RA_I2C_SLV1_DO (0x64)
-#define MPU_RA_I2C_SLV2_DO (0x65)
-#define MPU_RA_I2C_SLV3_DO (0x66)
+#define MPU_RA_BANK_SEL       (0x6D)
+#define MPU_RA_MEM_START_ADDR (0x6E)
+#define MPU_RA_MEM_R_W        (0x6F)
+#define MPU_RA_DMP_CFG_1      (0x70)
+#define MPU_RA_DMP_CFG_2      (0x71)
+#define MPU_RA_FIFO_R_W       (0x74)
+
+// Read/Write
+#define MPU_RA_SELF_TEST_X    (0x0D)
+#define MPU_RA_SELF_TEST_Y    (0x0E)
+#define MPU_RA_SELF_TEST_Z    (0x0F)
+#define MPU_RA_SELF_TEST_A    (0x10)
+#define MPU_RA_I2C_SLV0_DO    (0x63)
+#define MPU_RA_I2C_SLV1_DO    (0x64)
+#define MPU_RA_I2C_SLV2_DO    (0x65)
+#define MPU_RA_I2C_SLV3_DO    (0x66)
 #define MPU_RA_I2C_MST_DELAY_CTRL (0x67)
 #define MPU_RA_SIGNAL_PATH_RESET (0x68)
 #define MPU_RA_MOT_DETECT_CTRL (0x69)
-#define MPU_RA_USER_CTRL (0x6A)
-#define MPU_RA_PWR_MGMT_1 (0x6B)
-#define MPU_RA_PWR_MGMT_2 (0x6C)
-#define MPU_RA_BANK_SEL (0x6D)
-#define MPU_RA_MEM_START_ADDR (0x6E)
-#define MPU_RA_MEM_R_W (0x6F)
-#define MPU_RA_DMP_CFG_1 (0x70)
-#define MPU_RA_DMP_CFG_2 (0x71)
-#define MPU_RA_FIFO_R_W (0x74)
-
-// Read/Write
-#define MPU_RA_SELF_TEST_X   (0x0D)
-#define MPU_RA_SELF_TEST_Y   (0x0E)
-#define MPU_RA_SELF_TEST_Z   (0x0F)
-#define MPU_RA_SELF_TEST_A   (0x10)
+#define MPU_RA_USER_CTRL      (0x6A)
+#define MPU_RA_PWR_MGMT_1     (0x6B)
+#define MPU_RA_PWR_MGMT_2     (0x6C)
 
 // Read Only
 #define MPU_RA_DMP_INT_STATUS (0x39)
@@ -135,10 +135,18 @@
 #define MPU_RA_WHO_AM_I (0x75)
 
 // Settings
+#define MPU_ACCEL_FULL_SCALE_RANGE_2   ((uint8_t)0x00) // +/- 2 g
+#define MPU_ACCEL_FULL_SCALE_RANGE_4   ((uint8_t)0x08) // +/- 4 g
+#define MPU_ACCEL_FULL_SCALE_RANGE_8   ((uint8_t)0x10) // +/- 8 g
+#define MPU_ACCEL_FULL_SCALE_RANGE_16  ((uint8_t)0x18) // +/- 16 g
+
 #define MPU_GYRO_FULL_SCALE_RANGE_250   ((uint8_t)0x00) // +/- 250  deg/sec
 #define MPU_GYRO_FULL_SCALE_RANGE_500   ((uint8_t)0x08) // +/- 500  deg/sec
 #define MPU_GYRO_FULL_SCALE_RANGE_1000  ((uint8_t)0x10) // +/- 1000 deg/sec
 #define MPU_GYRO_FULL_SCALE_RANGE_2000  ((uint8_t)0x18) // +/- 2000 deg/sec
+
+#define MPU_ACCEL_SELF_TEST_XYZ         ((uint8_t)0xF0) // Enable self test on all three axes and set accelerometer range to +/- 8 g
+#define MPU_GYRO_SELF_TEST_XYZ          ((uint8_t)0xE0) // Enable self test on all three axes and set gyro range to +/- 250 deg/sec
 
 // function declarations
 HAL_StatusTypeDef ReadyMPU(void);
@@ -147,6 +155,7 @@ void ReadHLMPU(uint8_t addr, int16_t *data);
 uint8_t WriteMPU(uint8_t addr, uint8_t data);
 void InitMPU(void);
 void SetupMPU(void);
+void SelfTestMPU(void);
 void SetupMPUOld(void);
 void GetGyroMPU(void);
 void GetAccelMPU(void);
