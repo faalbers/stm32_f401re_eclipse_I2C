@@ -148,14 +148,17 @@
 #define MPU_ACCEL_SELF_TEST_XYZ         ((uint8_t)0xF0) // Enable self test on all three axes and set accelerometer range to +/- 8 g
 #define MPU_GYRO_SELF_TEST_XYZ          ((uint8_t)0xE0) // Enable self test on all three axes and set gyro range to +/- 250 deg/sec
 
+int16_t  MPU_GYRO_XOUT, MPU_GYRO_YOUT, MPU_GYRO_ZOUT;
+int16_t  MPU_ACCEL_XOUT, MPU_ACCEL_YOUT, MPU_ACCEL_ZOUT;
+
 // function declarations
 HAL_StatusTypeDef ReadyMPU(void);
 void ReadMPU(uint8_t addr, uint8_t *data);
 void ReadHLMPU(uint8_t addr, int16_t *data);
 uint8_t WriteMPU(uint8_t addr, uint8_t data);
-void InitMPU(void);
-void SetupMPU(void);
-void SelfTestMPU(void);
+HAL_StatusTypeDef InitMPU(void);
+HAL_StatusTypeDef SetupMPU(void);
+HAL_StatusTypeDef SelfTestMPU(void);
 void SetupMPUOld(void);
 void GetGyroMPU(void);
 void GetAccelMPU(void);
