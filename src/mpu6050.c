@@ -16,7 +16,27 @@ HAL_StatusTypeDef ReadyMPU(void)
   return HAL_I2C_IsDeviceReady(&MPU_I2cHandle, MPU_ADDRESS, 2, MPU_TIMEOUT);
 }
 
-void ReadMPU(uint8_t addr, uint8_t *data)
+void ReadMPU(uint8_t addr, uint8_t *data, uint16_t bytes)
+{
+  __disable_irq();
+  while (bytes != 0) {
+    *data = 0x00;
+    if (HAL_I2C_Master_Transmit(&MPU_I2cHandle, MPU_ADDRESS, &addr, 1, MPU_TIMEOUT) != HAL_OK) {
+      *data = 0xFF;
+      goto error_w;
+    }
+    if (HAL_I2C_Master_Receive(&MPU_I2cHandle, MPU_ADDRESS, data, 1, MPU_TIMEOUT) != HAL_OK) {
+      *data = 0xFF;
+    }
+    bytes--;
+    data++;
+  }
+
+  error_w:
+  __enable_irq();
+}
+
+void ReadMPUOld(uint8_t addr, uint8_t *data)
 {
   *data = 0x00;
 
@@ -37,8 +57,8 @@ void ReadMPU(uint8_t addr, uint8_t *data)
 // Probably needs Little Endian define
 void ReadHLMPU(uint8_t addr, int16_t *data)
 {
-  ReadMPU(addr,((uint8_t*)data)+1);
-  ReadMPU(addr+1,(uint8_t*)data);
+  ReadMPU(addr,((uint8_t*)data)+1,1);
+  ReadMPU(addr+1,(uint8_t*)data,1);
 }
 
 uint8_t WriteMPU(uint8_t addr, uint8_t data)
@@ -96,14 +116,72 @@ HAL_StatusTypeDef SetupMPU(void)
   if (ReadyMPU() != HAL_OK) return HAL_ERROR;
 
   // Take MPU out of sleep mode
-  WriteMPU(MPU_RA_PWR_MGMT_1, 0x00);
+  WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_WAKE_UP);
 
   // Run self test
   if (SelfTestMPU() != HAL_OK) return HAL_ERROR;
 
   // Calibrate
+  CalibrateMPU();
 
   return HAL_OK;
+}
+
+void CalibrateMPU(void)
+{
+  uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
+  int16_t ii, packet_count, fifo_count;
+  int32_t gyro_bias[3] = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
+  int16_t gyro_temp[3] = {0, 0, 0}, accel_temp[3] = {0, 0, 0};
+  uint16_t  gyrosensitivity  = 131;   // = 131 LSB/degrees/sec
+  uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g
+
+  // Reset device, reset all registers, clear gyro and accelerometer bias registers
+  WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_DEVICE_RESET);
+  HAL_Delay(100);
+
+  // get stable time source
+  // Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
+  WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_CLOCK_PLL_X_GYRO);
+  WriteMPU(MPU_RA_PWR_MGMT_2, MPU_PWR_MGMT_2_RESET);
+  HAL_Delay(200);
+
+  // Configure device for bias calculation
+  WriteMPU(MPU_RA_INT_ENABLE, MPU_INT_ENABLE_DISSABLE_ALL); // Disable all interrupts
+  WriteMPU(MPU_RA_FIFO_EN, MPU_FIFO_EN_DISSABLE_ALL); // Disable FIFO
+  WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_CLOCK_INTERNAL); // Turn on internal clock source
+  WriteMPU(MPU_RA_I2C_MST_CTRL, MPU_I2C_MST_RESET); // Disable I2C master
+  WriteMPU(MPU_RA_USER_CTRL, MPU_USER_CTRL_RESET); // Disable FIFO and I2C master modes
+  WriteMPU(MPU_RA_USER_CTRL, MPU_USER_CTRL_FIFO_RESET); // Reset FIFO
+  HAL_Delay(15);
+
+  // Configure MPU6050 gyro and accelerometer for bias calculation
+  WriteMPU(MPU_RA_CONFIG, MPU_CONFIG_DLPF_184_188);      // Set low-pass filter to 188 Hz
+  WriteMPU(MPU_RA_SMPLRT_DIV, 0x00);  // Set sample rate to 1 kHz = 1kHz/(1-SMPLRT_DIV)
+  WriteMPU(MPU_RA_GYRO_CONFIG, MPU_GYRO_FULL_SCALE_RANGE_250);  // Set gyro full-scale to 250 degrees per second, maximum sensitivity
+  WriteMPU(MPU_RA_ACCEL_CONFIG, MPU_ACCEL_FULL_SCALE_RANGE_2); // Set accelerometer full-scale to 2 g, maximum sensitivity
+
+  // Configure FIFO to capture accelerometer and gyro data for bias calculation
+  WriteMPU(MPU_RA_USER_CTRL, MPU_USER_CTRL_FIFO_EN);   // Enable FIFO
+  WriteMPU(MPU_RA_FIFO_EN, (MPU_FIFO_EN_XG | MPU_FIFO_EN_YG | MPU_FIFO_EN_ZG | MPU_FIFO_EN_ACCEL)); // Enable gyro and accelerometer sensors for FIFO  (max size 1024 bytes in MPU-6050)
+  HAL_Delay(80); // accumulate 80 samples in 80 milliseconds = 960 bytes
+
+  // At end of sample accumulation, turn off FIFO sensor read
+  WriteMPU(MPU_RA_FIFO_EN, MPU_FIFO_EN_DISSABLE_ALL); // Disable gyro and accelerometer sensors for FIFO
+  ReadHLMPU(MPU_RA_FIFO_COUNTH, &fifo_count); // read FIFO sample count
+  packet_count = fifo_count/12;// How many sets of full gyro and accelerometer data for averaging
+
+  trace_printf("FIFO count: %d\n", fifo_count);
+  trace_printf("FIFO count: %d\n", packet_count);
+
+  for (ii = 0; ii < packet_count; ii++) {
+    ReadMPU(MPU_RA_FIFO_R_W, data,12); // read data for averaging
+    accel_temp[0] = (int16_t) (((int16_t)data[0] << 8) | data[1]  ) ;  // Form signed 16-bit integer for each sample in FIFO
+    accel_temp[1] = (int16_t) (((int16_t)data[2] << 8) | data[3]  ) ;
+    accel_temp[2] = (int16_t) (((int16_t)data[4] << 8) | data[5]  ) ;
+    gyro_temp[0]  = (int16_t) (((int16_t)data[6] << 8) | data[7]  ) ;
+    gyro_temp[1]  = (int16_t) (((int16_t)data[8] << 8) | data[9]  ) ;
+    gyro_temp[2]  = (int16_t) (((int16_t)data[10] << 8) | data[11]) ;  }
 }
 
 HAL_StatusTypeDef SelfTestMPU(void)
@@ -116,10 +194,10 @@ HAL_StatusTypeDef SelfTestMPU(void)
 
   // Set Factory trims
   // Get MPU's self test raw data
-  ReadMPU(MPU_RA_SELF_TEST_X, rawData); // X-axis self-test results
-  ReadMPU(MPU_RA_SELF_TEST_Y, rawData+1); // Y-axis self-test results
-  ReadMPU(MPU_RA_SELF_TEST_Z, rawData+2); // Z-axis self-test results
-  ReadMPU(MPU_RA_SELF_TEST_A, rawData+3); // Mixed-axis self-test results
+  ReadMPU(MPU_RA_SELF_TEST_X, rawData,1); // X-axis self-test results
+  ReadMPU(MPU_RA_SELF_TEST_Y, rawData+1,1); // Y-axis self-test results
+  ReadMPU(MPU_RA_SELF_TEST_Z, rawData+2,1); // Z-axis self-test results
+  ReadMPU(MPU_RA_SELF_TEST_A, rawData+3,1); // Mixed-axis self-test results
 
   // Extract the acceleration self test data
   selfTest[0] = ((rawData[0] & 0xE0) >> 3) | ((rawData[3] & 0x30) >> 4); // XA_TEST result is a five-bit unsigned integer
@@ -184,7 +262,6 @@ void SetupMPUOld(void)
 {
   //Sets sample rate to 8000/1+7 = 1000Hz
   WriteMPU(MPU_RA_SMPLRT_DIV, 0x07);
-  //trace_printf("SMPLRT_DIV: 0x%02x\n", ReadMPU(MPU_RA_SMPLRT_DIV));
   //Disable FSync, 256Hz DLPF
   WriteMPU(MPU_RA_CONFIG, 0x00);
   //Disable gyro self tests, scale of 500 degrees/s

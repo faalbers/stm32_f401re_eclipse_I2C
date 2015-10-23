@@ -148,16 +148,62 @@
 #define MPU_ACCEL_SELF_TEST_XYZ         ((uint8_t)0xF0) // Enable self test on all three axes and set accelerometer range to +/- 8 g
 #define MPU_GYRO_SELF_TEST_XYZ          ((uint8_t)0xE0) // Enable self test on all three axes and set gyro range to +/- 250 deg/sec
 
+#define MPU_PWR_MGMT_1_WAKE_UP          ((uint8_t)0x00) // Turn off sleep
+#define MPU_PWR_MGMT_1_SLEEP            ((uint8_t)0x40) // Turn on sleep
+#define MPU_PWR_MGMT_1_DEVICE_RESET     ((uint8_t)0x80) // Toggle reset device
+#define MPU_PWR_MGMT_1_CLOCK_PLL_X_GYRO ((uint8_t)0x01) // Set clock source to be PLL with x-axis gyroscope reference
+#define MPU_PWR_MGMT_1_CLOCK_INTERNAL   ((uint8_t)0x00) // Set clock source to internal clock
+#define MPU_PWR_MGMT_2_RESET            ((uint8_t)0x00) // Reset
+
+#define MPU_INT_ENABLE_DATA_RDY         ((uint8_t)0x01) // Occurs each time a write happened to a register
+#define MPU_INT_ENABLE_I2C_MST_INT      ((uint8_t)0x08) // I2C Master can generate interrupts
+#define MPU_INT_ENABLE_FIFO_OFLOW       ((uint8_t)0x10) // Generate interrupt at FIFO overflow
+#define MPU_INT_ENABLE_MOT              ((uint8_t)0x40) // Generate interrupt at motion detection
+#define MPU_INT_ENABLE_DISSABLE_ALL     ((uint8_t)0x00) // Disable all interrupt generation
+
+#define MPU_FIFO_EN_XG                  ((uint8_t)0x40) // Gyro X FIFO enabled
+#define MPU_FIFO_EN_YG                  ((uint8_t)0x20) // Gyro X FIFO enabled
+#define MPU_FIFO_EN_ZG                  ((uint8_t)0x10) // Gyro X FIFO enabled
+#define MPU_FIFO_EN_ACCEL               ((uint8_t)0x08) // Accel FIFO enabled
+#define MPU_FIFO_EN_SLV2                ((uint8_t)0x04) // EXT_SENSE_DATA Slave2 FIFO enabled
+#define MPU_FIFO_EN_SLV1                ((uint8_t)0x02) // EXT_SENSE_DATA Slave1 FIFO enabled
+#define MPU_FIFO_EN_SLV0                ((uint8_t)0x01) // EXT_SENSE_DATA Slave0 FIFO enabled
+#define MPU_FIFO_EN_DISSABLE_ALL        ((uint8_t)0x00) // No sensor uses FIFO
+
+#define MPU_I2C_MST_CTRL_SLV3_FIFO_EN   ((uint8_t)0x20) // EXT_SENSE_DATA Slave3 FIFO enabled
+#define MPU_I2C_MST_CTRL_MUL_MST_EN     ((uint8_t)0x80) // multi-master enabled
+#define MPU_I2C_MST_CTRL_WAIT_FOR_ES    ((uint8_t)0x40) // Delay Data Ready interrupt till EXT_DENSE_DATA is done
+#define MPU_I2C_MST_CTRL_CLK            ((uint8_t)0x10) // Set I2C master clock speed, 8Mhz clock devider 0.
+#define MPU_I2C_MST_RESET               ((uint8_t)0x00) // Disable I2C master
+
+#define MPU_USER_CTRL_SIG_COND_RESET    ((uint8_t)0x01) //
+#define MPU_USER_CTRL_I2C_MST_RESET     ((uint8_t)0x02) //
+#define MPU_USER_CTRL_FIFO_RESET        ((uint8_t)0x04) //
+#define MPU_USER_CTRL_I2C_IF_DIS        ((uint8_t)0x10) //
+#define MPU_USER_CTRL_I2C_MST_EN        ((uint8_t)0x20) //
+#define MPU_USER_CTRL_FIFO_EN           ((uint8_t)0x40) //
+#define MPU_USER_CTRL_RESET             ((uint8_t)0x00) //
+
+#define MPU_CONFIG_DLPF_260_256         ((uint8_t)0x00) // Low Pass Filter Bandwith Gyro 260 Hz/ Accel 256 Hz
+#define MPU_CONFIG_DLPF_184_188         ((uint8_t)0x01) // Low Pass Filter Bandwith Gyro 184 Hz/ Accel 188 Hz
+#define MPU_CONFIG_DLPF_94_98           ((uint8_t)0x02) // Low Pass Filter Bandwith Gyro 94 Hz/ Accel 98 Hz
+#define MPU_CONFIG_DLPF_44_42           ((uint8_t)0x03) // Low Pass Filter Bandwith Gyro 44 Hz/ Accel 42 Hz
+#define MPU_CONFIG_DLPF_21_20           ((uint8_t)0x04) // Low Pass Filter Bandwith Gyro 21 Hz/ Accel 20 Hz
+#define MPU_CONFIG_DLPF_10_10           ((uint8_t)0x05) // Low Pass Filter Bandwith Gyro 10 Hz/ Accel 10 Hz
+#define MPU_CONFIG_DLPF_5_5             ((uint8_t)0x06) // Low Pass Filter Bandwith Gyro 5 Hz/ Accel 5 Hz
+
 int16_t  MPU_GYRO_XOUT, MPU_GYRO_YOUT, MPU_GYRO_ZOUT;
 int16_t  MPU_ACCEL_XOUT, MPU_ACCEL_YOUT, MPU_ACCEL_ZOUT;
 
 // function declarations
 HAL_StatusTypeDef ReadyMPU(void);
-void ReadMPU(uint8_t addr, uint8_t *data);
+void ReadMPU(uint8_t addr, uint8_t *data, uint16_t bytes);
+void ReadMPUOld(uint8_t addr, uint8_t *data);
 void ReadHLMPU(uint8_t addr, int16_t *data);
 uint8_t WriteMPU(uint8_t addr, uint8_t data);
 HAL_StatusTypeDef InitMPU(void);
 HAL_StatusTypeDef SetupMPU(void);
+void CalibrateMPU(void);
 HAL_StatusTypeDef SelfTestMPU(void);
 void SetupMPUOld(void);
 void GetGyroMPU(void);
