@@ -134,7 +134,7 @@ void CalibrateMPU(void)
   int32_t gyro_bias[3] = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
   int16_t gyro_temp[3] = {0, 0, 0}, accel_temp[3] = {0, 0, 0};
   uint16_t  gyrosensitivity  = 131;   // = 131 LSB/degrees/sec
-  uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g
+  uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g ... this is supposed to be gravity
 
   // Reset device, reset all registers, clear gyro and accelerometer bias registers
   WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_DEVICE_RESET);
@@ -171,17 +171,63 @@ void CalibrateMPU(void)
   ReadHLMPU(MPU_RA_FIFO_COUNTH, &fifo_count); // read FIFO sample count
   packet_count = fifo_count/12;// How many sets of full gyro and accelerometer data for averaging
 
-  trace_printf("FIFO count: %d\n", fifo_count);
-  trace_printf("FIFO count: %d\n", packet_count);
+  //trace_printf("FIFO count: %d\n", fifo_count);
+  //trace_printf("FIFO count: %d\n", packet_count);
 
   for (ii = 0; ii < packet_count; ii++) {
-    ReadMPU(MPU_RA_FIFO_R_W, data,12); // read data for averaging
-    accel_temp[0] = (int16_t) (((int16_t)data[0] << 8) | data[1]  ) ;  // Form signed 16-bit integer for each sample in FIFO
+    // read data for averaging
+    ReadMPU(MPU_RA_FIFO_R_W, data,12);
+    // Form signed 16-bit integer for each sample in FIFO
+    accel_temp[0] = (int16_t) (((int16_t)data[0] << 8) | data[1]  ) ;
     accel_temp[1] = (int16_t) (((int16_t)data[2] << 8) | data[3]  ) ;
     accel_temp[2] = (int16_t) (((int16_t)data[4] << 8) | data[5]  ) ;
     gyro_temp[0]  = (int16_t) (((int16_t)data[6] << 8) | data[7]  ) ;
     gyro_temp[1]  = (int16_t) (((int16_t)data[8] << 8) | data[9]  ) ;
-    gyro_temp[2]  = (int16_t) (((int16_t)data[10] << 8) | data[11]) ;  }
+    gyro_temp[2]  = (int16_t) (((int16_t)data[10] << 8) | data[11]) ;
+
+    // Sum individual signed 16-bit biases to get accumulated signed 32-bit biases
+    accel_bias[0] += (int32_t) accel_temp[0];
+    accel_bias[1] += (int32_t) accel_temp[1];
+    accel_bias[2] += (int32_t) accel_temp[2];
+    gyro_bias[0]  += (int32_t) gyro_temp[0];
+    gyro_bias[1]  += (int32_t) gyro_temp[1];
+    gyro_bias[2]  += (int32_t) gyro_temp[2];
+  }
+
+  // Normalize sums to get average count biases
+  accel_bias[0] /= (int32_t) packet_count;
+  accel_bias[1] /= (int32_t) packet_count;
+  accel_bias[2] /= (int32_t) packet_count;
+  gyro_bias[0]  /= (int32_t) packet_count;
+  gyro_bias[1]  /= (int32_t) packet_count;
+  gyro_bias[2]  /= (int32_t) packet_count;
+
+  for (ii = 0; ii < 3; ii++) {
+    trace_printf("Accel Bias: %d\n", accel_bias[ii]);
+    trace_printf("Gyro Bias: %d\n", gyro_bias[ii]);
+  }
+
+  return;
+  // Remove gravity from the z-axis accelerometer bias calculation
+  if(accel_bias[2] > 0L) {
+    accel_bias[2] -= (int32_t) accelsensitivity;
+  } else {
+    accel_bias[2] += (int32_t) accelsensitivity;
+  }
+
+  // Construct the gyro biases for push to the hardware gyro bias registers, which are reset to zero upon device startup
+  data[0] = (-gyro_bias[0]/4  >> 8) & 0xFF; // Divide by 4 to get 32.9 LSB per deg/s to conform to expected bias input format
+  data[1] = (-gyro_bias[0]/4)       & 0xFF; // Biases are additive, so change sign on calculated average gyro biases
+  data[2] = (-gyro_bias[1]/4  >> 8) & 0xFF;
+  data[3] = (-gyro_bias[1]/4)       & 0xFF;
+  data[4] = (-gyro_bias[2]/4  >> 8) & 0xFF;
+  data[5] = (-gyro_bias[2]/4)       & 0xFF;
+
+  // construct gyro bias in deg/s for later manual subtraction
+  //dest1[0] = (float) gyro_bias[0]/(float) gyrosensitivity;
+  //dest1[1] = (float) gyro_bias[1]/(float) gyrosensitivity;
+  //dest1[2] = (float) gyro_bias[2]/(float) gyrosensitivity;
+
 }
 
 HAL_StatusTypeDef SelfTestMPU(void)
