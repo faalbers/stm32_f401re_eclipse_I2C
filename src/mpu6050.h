@@ -198,7 +198,6 @@ int16_t  MPU_ACCEL_XOUT, MPU_ACCEL_YOUT, MPU_ACCEL_ZOUT;
 // function declarations
 HAL_StatusTypeDef ReadyMPU(void);
 void ReadMPU(uint8_t addr, uint8_t *data, uint16_t bytes);
-void ReadMPUOld(uint8_t addr, uint8_t *data);
 void ReadHLMPU(uint8_t addr, int16_t *data);
 uint8_t WriteMPU(uint8_t addr, uint8_t data);
 HAL_StatusTypeDef InitMPU(void);

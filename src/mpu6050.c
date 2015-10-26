@@ -18,36 +18,12 @@ HAL_StatusTypeDef ReadyMPU(void)
 
 void ReadMPU(uint8_t addr, uint8_t *data, uint16_t bytes)
 {
-  __disable_irq();
-  while (bytes != 0) {
-    *data = 0x00;
-    if (HAL_I2C_Master_Transmit(&MPU_I2cHandle, MPU_ADDRESS, &addr, 1, MPU_TIMEOUT) != HAL_OK) {
-      *data = 0xFF;
-      goto error_w;
-    }
-    if (HAL_I2C_Master_Receive(&MPU_I2cHandle, MPU_ADDRESS, data, 1, MPU_TIMEOUT) != HAL_OK) {
-      *data = 0xFF;
-    }
-    bytes--;
-    data++;
-  }
-
-  error_w:
-  __enable_irq();
-}
-
-void ReadMPUOld(uint8_t addr, uint8_t *data)
-{
-  *data = 0x00;
+  for (uint16_t ii = 0; ii < bytes; ii++) *(data+ii) = 0x00;
 
   __disable_irq();
-  if (HAL_I2C_Master_Transmit(&MPU_I2cHandle, MPU_ADDRESS, &addr, 1, MPU_TIMEOUT) != HAL_OK) {
-    *data = 0xFF;
+  if (HAL_I2C_Master_Transmit(&MPU_I2cHandle, MPU_ADDRESS, &addr, 1, MPU_TIMEOUT) != HAL_OK)
     goto error_w;
-  }
-  if (HAL_I2C_Master_Receive(&MPU_I2cHandle, MPU_ADDRESS, data, 1, MPU_TIMEOUT) != HAL_OK) {
-    *data = 0xFF;
-  }
+  HAL_I2C_Master_Receive(&MPU_I2cHandle, MPU_ADDRESS, data, bytes, MPU_TIMEOUT) != HAL_OK;
 
   error_w:
   __enable_irq();
@@ -129,12 +105,13 @@ HAL_StatusTypeDef SetupMPU(void)
 
 void CalibrateMPU(void)
 {
+  float dest1[3], dest2[3];
   uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
   int16_t ii, packet_count, fifo_count;
   int32_t gyro_bias[3] = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
   int16_t gyro_temp[3] = {0, 0, 0}, accel_temp[3] = {0, 0, 0};
-  uint16_t  gyrosensitivity  = 131;   // = 131 LSB/degrees/sec
-  uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g ... this is supposed to be gravity
+  uint16_t  gyrosensitivity  = 131;   // = 1 deg/sec  ... based on setting of -/+ 250 deg/sec full range
+  uint16_t  accelsensitivity = 16384;  // = 1 g ... based on setting of -/+ 2g full range
 
   // Reset device, reset all registers, clear gyro and accelerometer bias registers
   WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_DEVICE_RESET);
@@ -202,31 +179,93 @@ void CalibrateMPU(void)
   gyro_bias[1]  /= (int32_t) packet_count;
   gyro_bias[2]  /= (int32_t) packet_count;
 
+  /*
   for (ii = 0; ii < 3; ii++) {
     trace_printf("Accel Bias: %d\n", accel_bias[ii]);
     trace_printf("Gyro Bias: %d\n", gyro_bias[ii]);
   }
+  */
 
-  return;
-  // Remove gravity from the z-axis accelerometer bias calculation
-  if(accel_bias[2] > 0L) {
-    accel_bias[2] -= (int32_t) accelsensitivity;
-  } else {
-    accel_bias[2] += (int32_t) accelsensitivity;
-  }
+  // Remove 1g gravity from the z-axis accelerometer bias calculation
+  // Make sure board is faced upwards
+  accel_bias[2] -= (int32_t) accelsensitivity;
 
   // Construct the gyro biases for push to the hardware gyro bias registers, which are reset to zero upon device startup
-  data[0] = (-gyro_bias[0]/4  >> 8) & 0xFF; // Divide by 4 to get 32.9 LSB per deg/s to conform to expected bias input format
-  data[1] = (-gyro_bias[0]/4)       & 0xFF; // Biases are additive, so change sign on calculated average gyro biases
+  // Divide by 4 to get 32.9 LSB per deg/s to conform to expected bias input format
+  // Biases are additive, so change sign on calculated average gyro biases
+  //NOTE: Don't understand division by 4
+  data[0] = (-gyro_bias[0]/4  >> 8) & 0xFF;
+  data[1] = (-gyro_bias[0]/4)       & 0xFF;
   data[2] = (-gyro_bias[1]/4  >> 8) & 0xFF;
   data[3] = (-gyro_bias[1]/4)       & 0xFF;
   data[4] = (-gyro_bias[2]/4  >> 8) & 0xFF;
   data[5] = (-gyro_bias[2]/4)       & 0xFF;
 
-  // construct gyro bias in deg/s for later manual subtraction
-  //dest1[0] = (float) gyro_bias[0]/(float) gyrosensitivity;
-  //dest1[1] = (float) gyro_bias[1]/(float) gyrosensitivity;
-  //dest1[2] = (float) gyro_bias[2]/(float) gyrosensitivity;
+  // Push gyro biases to hardware registers
+  WriteMPU(MPU_RA_XG_OFFS_USRH, data[0]);
+  WriteMPU(MPU_RA_XG_OFFS_USRL, data[1]);
+  WriteMPU(MPU_RA_YG_OFFS_USRH, data[2]);
+  WriteMPU(MPU_RA_YG_OFFS_USRL, data[3]);
+  WriteMPU(MPU_RA_ZG_OFFS_USRH, data[4]);
+  WriteMPU(MPU_RA_ZG_OFFS_USRL, data[5]);
+
+    // construct gyro bias in deg/s for later manual subtraction
+  //NOTE: Don't uderstand this conversion
+  dest1[0] = (float) gyro_bias[0]/(float) gyrosensitivity;
+  dest1[1] = (float) gyro_bias[1]/(float) gyrosensitivity;
+  dest1[2] = (float) gyro_bias[2]/(float) gyrosensitivity;
+
+  // Construct the accelerometer biases for push to the hardware accelerometer bias registers. These registers contain
+  // factory trim values which must be added to the calculated accelerometer biases; on boot up these registers will hold
+  // non-zero values. In addition, bit 0 of the lower byte must be preserved since it is used for temperature
+  // compensation calculations. Accelerometer bias registers expect bias input as 2048 LSB per g, so that
+  // the accelerometer biases calculated above must be divided by 8.
+
+  int32_t accel_bias_reg[3] = {0, 0, 0}; // A place to hold the factory accelerometer trim biases
+  ReadMPU(MPU_RA_XA_OFFS_H, &data[0], 2); // Read factory accelerometer trim values
+  accel_bias_reg[0] = (int16_t) ((int16_t)data[0] << 8) | data[1];
+  ReadMPU(MPU_RA_YA_OFFS_H, &data[0], 2);
+  accel_bias_reg[1] = (int16_t) ((int16_t)data[0] << 8) | data[1];
+  ReadMPU(MPU_RA_ZA_OFFS_H, &data[0], 2);
+  accel_bias_reg[2] = (int16_t) ((int16_t)data[0] << 8) | data[1];
+
+  uint32_t mask = 1uL; // Define mask for temperature compensation bit 0 of lower byte of accelerometer bias registers
+  uint8_t mask_bit[3] = {0, 0, 0}; // Define array to hold mask bit for each accelerometer bias axis
+
+  for(ii = 0; ii < 3; ii++) {
+    if(accel_bias_reg[ii] & mask) mask_bit[ii] = 0x01; // If temperature compensation bit is set, record that fact in mask_bit
+  }
+
+  data[0] = (accel_bias_reg[0] >> 8) & 0xFF;
+  data[1] = (accel_bias_reg[0])      & 0xFF;
+  data[1] = data[1] | mask_bit[0]; // preserve temperature compensation bit when writing back to accelerometer bias registers
+  data[2] = (accel_bias_reg[1] >> 8) & 0xFF;
+  data[3] = (accel_bias_reg[1])      & 0xFF;
+  data[3] = data[3] | mask_bit[1]; // preserve temperature compensation bit when writing back to accelerometer bias registers
+  data[4] = (accel_bias_reg[2] >> 8) & 0xFF;
+  data[5] = (accel_bias_reg[2])      & 0xFF;
+  data[5] = data[5] | mask_bit[2]; // preserve temperature compensation bit when writing back to accelerometer bias registers
+
+  // Output scaled accelerometer biases for manual subtraction in the main program
+  dest2[0] = (float)accel_bias[0]/(float)accelsensitivity;
+  dest2[1] = (float)accel_bias[1]/(float)accelsensitivity;
+  dest2[2] = (float)accel_bias[2]/(float)accelsensitivity;
+}
+
+void GetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias)
+{
+  // Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
+  WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_CLOCK_PLL_X_GYRO);
+  HAL_Delay(200);
+
+  // Configure device for bias calculation
+  WriteMPU(MPU_RA_INT_ENABLE, MPU_INT_ENABLE_DISSABLE_ALL); // Disable all interrupts
+  WriteMPU(MPU_RA_FIFO_EN, MPU_FIFO_EN_DISSABLE_ALL); // Disable FIFO
+  WriteMPU(MPU_RA_PWR_MGMT_1, MPU_PWR_MGMT_1_CLOCK_INTERNAL); // Turn on internal clock source
+  WriteMPU(MPU_RA_I2C_MST_CTRL, MPU_I2C_MST_RESET); // Disable I2C master
+  WriteMPU(MPU_RA_USER_CTRL, MPU_USER_CTRL_RESET); // Disable FIFO and I2C master modes
+  WriteMPU(MPU_RA_USER_CTRL, MPU_USER_CTRL_FIFO_RESET); // Reset FIFO
+  HAL_Delay(15);
 
 }
 
@@ -244,6 +283,7 @@ HAL_StatusTypeDef SelfTestMPU(void)
   ReadMPU(MPU_RA_SELF_TEST_Y, rawData+1,1); // Y-axis self-test results
   ReadMPU(MPU_RA_SELF_TEST_Z, rawData+2,1); // Z-axis self-test results
   ReadMPU(MPU_RA_SELF_TEST_A, rawData+3,1); // Mixed-axis self-test results
+
 
   // Extract the acceleration self test data
   selfTest[0] = ((rawData[0] & 0xE0) >> 3) | ((rawData[3] & 0x30) >> 4); // XA_TEST result is a five-bit unsigned integer
