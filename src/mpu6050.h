@@ -179,6 +179,7 @@
 #define MPU_USER_CTRL_SIG_COND_RESET    ((uint8_t)0x01) //
 #define MPU_USER_CTRL_I2C_MST_RESET     ((uint8_t)0x02) //
 #define MPU_USER_CTRL_FIFO_RESET        ((uint8_t)0x04) //
+#define MPU_USER_CTRL_DMP_RESET         ((uint8_t)0x08) //
 #define MPU_USER_CTRL_I2C_IF_DIS        ((uint8_t)0x10) //
 #define MPU_USER_CTRL_I2C_MST_EN        ((uint8_t)0x20) //
 #define MPU_USER_CTRL_FIFO_EN           ((uint8_t)0x40) //
@@ -207,5 +208,9 @@ HAL_StatusTypeDef SelfTestMPU(void);
 void SetupMPUOld(void);
 void GetGyroMPU(void);
 void GetAccelMPU(void);
+void GetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias);
+void SetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias);
+void SetGyroBiasesMPU(int32_t *gyro_bias);
+void SetAccelBiasesMPU(int32_t *accel_bias);
 
 #endif /* MPU6050_H_ */
