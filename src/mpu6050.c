@@ -349,6 +349,7 @@ void GetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias)
 void SetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias)
 {
   SetGyroBiasesMPU(gyro_bias);
+  SetAccelBiasesMPU(accel_bias);
 }
 
 void SetGyroBiasesMPU(int32_t *gyro_bias)
@@ -378,6 +379,28 @@ void SetGyroBiasesMPU(int32_t *gyro_bias)
 
 void SetAccelBiasesMPU(int32_t *accel_bias)
 {
+  int16_t accel_bias_reg[3] = {0, 0, 0};
+  uint8_t data[6];
+
+  // Read accel offset cancellations registers (factory trim values)
+  // The format is in the +-8 G range.
+  // In addition, bit 0 of the lower byte must be preserved since it
+  // is used for temperature compensation calculations.
+
+  ReadHLMPU(MPU_RA_XA_OFFS_H, &accel_bias_reg[0]);
+  ReadHLMPU(MPU_RA_YA_OFFS_H, &accel_bias_reg[2]);
+  ReadHLMPU(MPU_RA_ZA_OFFS_H, &accel_bias_reg[4]);
+
+  // bit 0 of the lower byte must be preserved since it is used for
+  // temperature compensation calculations.
+  // Negate because it is a subtracting value
+  accel_bias_reg[0] = -(accel_bias_reg[0] & ~(0x01));
+  accel_bias_reg[2] = -(accel_bias_reg[2] & ~(0x01));
+  accel_bias_reg[4] = -(accel_bias_reg[4] & ~(0x01));
+
+
+
+  // The register is initialized with OTP factory trim values.
 }
 
 HAL_StatusTypeDef SelfTestMPU(void)
