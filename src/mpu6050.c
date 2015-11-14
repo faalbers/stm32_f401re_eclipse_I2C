@@ -23,7 +23,7 @@ void ReadMPU(uint8_t addr, uint8_t *data, uint16_t bytes)
   __disable_irq();
   if (HAL_I2C_Master_Transmit(&MPU_I2cHandle, MPU_ADDRESS, &addr, 1, MPU_TIMEOUT) != HAL_OK)
     goto error_w;
-  HAL_I2C_Master_Receive(&MPU_I2cHandle, MPU_ADDRESS, data, bytes, MPU_TIMEOUT) != HAL_OK;
+  HAL_I2C_Master_Receive(&MPU_I2cHandle, MPU_ADDRESS, data, bytes, MPU_TIMEOUT);
 
   error_w:
   __enable_irq();
@@ -236,11 +236,11 @@ void CalibrateMPU(void)
   // the accelerometer biases calculated above must be divided by 8.
 
   int32_t accel_bias_reg[3] = {0, 0, 0}; // A place to hold the factory accelerometer trim biases
-  ReadMPU(MPU_RA_XA_OFFS_H, &data[0], 2); // Read factory accelerometer trim values
+  ReadMPU(MPU_RA_XA_OFFS_USRH, &data[0], 2); // Read factory accelerometer trim values
   accel_bias_reg[0] = (int16_t) ((int16_t)data[0] << 8) | data[1];
-  ReadMPU(MPU_RA_YA_OFFS_H, &data[0], 2);
+  ReadMPU(MPU_RA_YA_OFFS_USRH, &data[0], 2);
   accel_bias_reg[1] = (int16_t) ((int16_t)data[0] << 8) | data[1];
-  ReadMPU(MPU_RA_ZA_OFFS_H, &data[0], 2);
+  ReadMPU(MPU_RA_ZA_OFFS_USRH, &data[0], 2);
   accel_bias_reg[2] = (int16_t) ((int16_t)data[0] << 8) | data[1];
 
   uint32_t mask = 1uL; // Define mask for temperature compensation bit 0 of lower byte of accelerometer bias registers
@@ -271,7 +271,7 @@ void GetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias)
   uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
   int16_t ii, packet_count, fifo_count;
   int16_t gyro_temp[3] = {0, 0, 0}, accel_temp[3] = {0, 0, 0};
-  uint16_t  accelsensitivity = 16384;  // = 1 g ... based on setting of -/+ 2g full range
+  int32_t  accel_sense = MPU_ACCEL_TEST_SENS;  // = 1 g
 
   // Zero out the biases
   for (ii = 0; ii < 3; ii++) gyro_bias[ii] = accel_bias[ii] = 0;
@@ -292,10 +292,8 @@ void GetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias)
   // Configure MPU6050 gyro and accelerometer for bias calculation
   WriteMPU(MPU_RA_CONFIG, MPU_CONFIG_DLPF_184_188);      // Set low-pass filter to 188 Hz
   WriteMPU(MPU_RA_SMPLRT_DIV, 0x00);  // Set sample rate to 1 kHz = 1kHz/(1-SMPLRT_DIV)
-  WriteMPU(MPU_RA_GYRO_CONFIG, MPU_GYRO_FULL_SCALE_RANGE_250);  // Set gyro full-scale to 250 degrees per second, maximum sensitivity
-  // One says 2g FSC other say say 16g , will stay at 16g6 for now
-  //WriteMPU(MPU_RA_ACCEL_CONFIG, MPU_ACCEL_FULL_SCALE_RANGE_2); // Set accelerometer full-scale to 2 g, maximum sensitivity
-  WriteMPU(MPU_RA_ACCEL_CONFIG, MPU_ACCEL_FULL_SCALE_RANGE_16); // Set accelerometer full-scale to 16 g, maximum sensitivity
+  WriteMPU(MPU_RA_GYRO_CONFIG, MPU_GYRO_TEST_FULL_RANGE);  // Set gyro test full-scale
+  WriteMPU(MPU_RA_ACCEL_CONFIG, MPU_ACCEL_TEST_FULL_RANGE); // Set accelerometer test full-scale
   HAL_Delay(200);
 
   // Configure FIFO to capture accelerometer and gyro data for bias calculation
@@ -340,9 +338,9 @@ void GetBiasesMPU(int32_t *gyro_bias, int32_t *accel_bias)
   // Remove 1g gravity from the z-axis accelerometer bias calculation
   // Make sure board is faced upwards
   if (accel_bias[2] > 0)
-    accel_bias[2] -= (int32_t) accelsensitivity;
+    accel_bias[2] -= accel_sense;
   else
-    accel_bias[2] += (int32_t) accelsensitivity;
+    accel_bias[2] += accel_sense;
 
 }
 
@@ -357,15 +355,15 @@ void SetGyroBiasesMPU(int32_t *gyro_bias)
   uint8_t data[6];
 
   // Construct the gyro biases for push to the hardware gyro bias registers, which are reset to zero upon device startup
-  // Divide by 4 to set full range from -+250 to -+ 1000 deg/s to conform to expected bias input format
   // Biases are additive, so change sign on calculated average gyro biases
   // Move to H and L
-  data[0] = (-gyro_bias[0]/4  >> 8) & 0xFF;
-  data[1] = (-gyro_bias[0]/4)       & 0xFF;
-  data[2] = (-gyro_bias[1]/4  >> 8) & 0xFF;
-  data[3] = (-gyro_bias[1]/4)       & 0xFF;
-  data[4] = (-gyro_bias[2]/4  >> 8) & 0xFF;
-  data[5] = (-gyro_bias[2]/4)       & 0xFF;
+  // The format is in the +- 1000 dps range.
+  data[0] = (-(int16_t)gyro_bias[0]  >> 8) & 0xFF;
+  data[1] = (-(int16_t)gyro_bias[0])       & 0xFF;
+  data[2] = (-(int16_t)gyro_bias[1]  >> 8) & 0xFF;
+  data[3] = (-(int16_t)gyro_bias[1])       & 0xFF;
+  data[4] = (-(int16_t)gyro_bias[2]  >> 8) & 0xFF;
+  data[5] = (-(int16_t)gyro_bias[2])       & 0xFF;
 
   // Push gyro biases to hardware registers
   WriteMPU(MPU_RA_XG_OFFS_USRH, data[0]);
@@ -379,7 +377,7 @@ void SetGyroBiasesMPU(int32_t *gyro_bias)
 
 void SetAccelBiasesMPU(int32_t *accel_bias)
 {
-  int16_t accel_bias_reg[3] = {0, 0, 0};
+  int16_t accel_bias_offset[3] = {0, 0, 0};
   uint8_t data[6];
 
   // Read accel offset cancellations registers (factory trim values)
@@ -387,20 +385,33 @@ void SetAccelBiasesMPU(int32_t *accel_bias)
   // In addition, bit 0 of the lower byte must be preserved since it
   // is used for temperature compensation calculations.
 
-  ReadHLMPU(MPU_RA_XA_OFFS_H, &accel_bias_reg[0]);
-  ReadHLMPU(MPU_RA_YA_OFFS_H, &accel_bias_reg[2]);
-  ReadHLMPU(MPU_RA_ZA_OFFS_H, &accel_bias_reg[4]);
+  ReadHLMPU(MPU_RA_XA_OFFS_USRH, &accel_bias_offset[0]);
+  ReadHLMPU(MPU_RA_YA_OFFS_USRH, &accel_bias_offset[2]);
+  ReadHLMPU(MPU_RA_ZA_OFFS_USRH, &accel_bias_offset[4]);
 
   // bit 0 of the lower byte must be preserved since it is used for
   // temperature compensation calculations.
   // Negate because it is a subtracting value
-  accel_bias_reg[0] = -(accel_bias_reg[0] & ~(0x01));
-  accel_bias_reg[2] = -(accel_bias_reg[2] & ~(0x01));
-  accel_bias_reg[4] = -(accel_bias_reg[4] & ~(0x01));
-
-
+  accel_bias_offset[0] -= (accel_bias[0] & ~(0x01));
+  accel_bias_offset[2] -= (accel_bias[2] & ~(0x01));
+  accel_bias_offset[4] -= (accel_bias[4] & ~(0x01));
 
   // The register is initialized with OTP factory trim values.
+  data[0] = (accel_bias_offset[0]  >> 8) & 0xFF;
+  data[1] = (accel_bias_offset[0])       & 0xFF;
+  data[2] = (accel_bias_offset[1]  >> 8) & 0xFF;
+  data[3] = (accel_bias_offset[1])       & 0xFF;
+  data[4] = (accel_bias_offset[2]  >> 8) & 0xFF;
+  data[5] = (accel_bias_offset[2])       & 0xFF;
+
+  // Push accel biases to hardware registers
+  WriteMPU(MPU_RA_XA_OFFS_USRH, data[0]);
+  WriteMPU(MPU_RA_XA_OFFS_USRL, data[1]);
+  WriteMPU(MPU_RA_YA_OFFS_USRH, data[2]);
+  WriteMPU(MPU_RA_YA_OFFS_USRL, data[3]);
+  WriteMPU(MPU_RA_ZA_OFFS_USRH, data[4]);
+  WriteMPU(MPU_RA_ZA_OFFS_USRL, data[5]);
+
 }
 
 HAL_StatusTypeDef SelfTestMPU(void)

@@ -14,6 +14,16 @@
 #define MPU_ADDRESS   (0xD0) // 0x68 bit shifted
 #define MPU_TIMEOUT   (10000)
 
+// Accel full range +/- 16 g
+// Set to bias register range
+#define MPU_ACCEL_TEST_FULL_RANGE  MPU_ACCEL_FULL_SCALE_RANGE_8
+#define MPU_ACCEL_TEST_SENS        32768/8
+
+// Gyro full range +/- 2000 dps
+// Set to bias register range
+#define MPU_GYRO_TEST_FULL_RANGE   MPU_GYRO_FULL_SCALE_RANGE_1000
+#define MPU_GYRO_TEST_SENS         32768/1000
+
 // Write Only
 #define MPU_RA_XG_OFFS_TC     (0x00) //[7] PWR_MODE, [6:1] XG_OFFS_TC, [0] OTP_BNK_VLD
 #define MPU_RA_YG_OFFS_TC     (0x01) //[7] PWR_MODE, [6:1] YG_OFFS_TC, [0] OTP_BNK_VLD
@@ -21,12 +31,12 @@
 #define MPU_RA_X_FINE_GAIN    (0x03) //[7:0] X_FINE_GAIN
 #define MPU_RA_Y_FINE_GAIN    (0x04) //[7:0] Y_FINE_GAIN
 #define MPU_RA_Z_FINE_GAIN    (0x05) //[7:0] Z_FINE_GAIN
-#define MPU_RA_XA_OFFS_H      (0x06) //[15:0] XA_OFFS
-#define MPU_RA_XA_OFFS_L_TC   (0x07)
-#define MPU_RA_YA_OFFS_H      (0x08) //[15:0] YA_OFFS
-#define MPU_RA_YA_OFFS_L_TC   (0x09)
-#define MPU_RA_ZA_OFFS_H      (0x0A) //[15:0] ZA_OFFS
-#define MPU_RA_ZA_OFFS_L_TC   (0x0B)
+#define MPU_RA_XA_OFFS_USRH   (0x06) //[15:0] XA_OFFS
+#define MPU_RA_XA_OFFS_USRL   (0x07)
+#define MPU_RA_YA_OFFS_USRH   (0x08) //[15:0] YA_OFFS
+#define MPU_RA_YA_OFFS_USRL   (0x09)
+#define MPU_RA_ZA_OFFS_USRH   (0x0A) //[15:0] ZA_OFFS
+#define MPU_RA_ZA_OFFS_USRL   (0x0B)
 #define MPU_RA_XG_OFFS_USRH   (0x13) //[15:0] XG_OFFS_USR
 #define MPU_RA_XG_OFFS_USRL   (0x14)
 #define MPU_RA_YG_OFFS_USRH   (0x15) //[15:0] YG_OFFS_USR
